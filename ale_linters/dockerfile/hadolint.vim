@@ -4,62 +4,46 @@
 call ale#Set('dockerfile_hadolint_use_docker', 'never')
 call ale#Set('dockerfile_hadolint_docker_image', 'hadolint/hadolint')
 
+" Shellcheck knows a 'style' severity - pin it to info level as well.
+let s:json_level_to_type = {
+    \ 'style': 'I',
+    \ 'info': 'I',
+    \ 'warning': 'W',
+    \ 'error': 'E',
+\ }
+
 function! ale_linters#dockerfile#hadolint#Handle(buffer, lines) abort
-    " Matches patterns line the following:
+    " The json output is an array where each lint finding is in a dict, for
+    " example:
     "
-    " /dev/stdin:19 DL3001 Pipe chain should start with a raw value.
-    " /dev/stdin:19:3 unexpected thing
-    let l:pattern = '\v^/dev/stdin:(\d+):?(\d+)? ((DL|SC)(\d+) )?((.+)?: )?(.+)$'
+    " [
+    "     {
+    "         "line": 5,
+    "         "code": "DL3008",
+    "         "message": "Pin versions in apt get install.",
+    "         "column": 1,
+    "         "file": "-",
+    "         "level": "warning"
+    "     },
+    "     ...
+    " ]
     let l:output = []
-
-    for l:match in ale#util#GetMatches(a:lines, l:pattern)
-        let l:lnum = 0
-        let l:colnum = 0
-
-        if l:match[1] isnot# ''
-            let l:lnum = l:match[1] + 0
-        endif
-
-        if l:match[2] isnot# ''
-            let l:colnum = l:match[2] + 0
-        endif
-
-        " Shellcheck knows a 'style' severity - pin it to info level as well.
-        if l:match[7] is# 'style'
-            let l:type = 'I'
-        elseif l:match[7] is# 'info'
-            let l:type = 'I'
-        elseif l:match[7] is# 'warning'
-            let l:type = 'W'
-        else
-            let l:type = 'E'
-        endif
-
-        let l:text = l:match[8]
-        let l:detail = l:match[8]
+    for l:error in json_decode(a:lines)
         let l:domain = 'https://github.com/hadolint/hadolint/wiki/'
-
-        if l:match[4] is# 'SC'
+        if l:error['code'][:1] is# 'SC'
             let l:domain = 'https://github.com/koalaman/shellcheck/wiki/'
         endif
-
-        if l:match[5] isnot# ''
-            let l:code = l:match[4] . l:match[5]
-            let l:link = ' ( ' . l:domain . l:code . ' )'
-            let l:detail = l:code . l:link . "\n\n" . l:detail
-        else
-            let l:type = 'E'
-        endif
-
+        let l:detail = printf("%s ( %s%s ) \n\n%s", 
+            \ l:error['code'], l:domain, l:error['code'], l:error['message'],
+        \ ) 
         call add(l:output, {
-        \   'lnum': l:lnum,
-        \   'col': l:colnum,
-        \   'type': l:type,
-        \   'text': l:text,
-        \   'detail': l:detail
+        \   'lnum': l:error['line'],
+        \   'col': l:error['column'],
+        \   'type': get(s:json_level_to_type, l:error['level'], 'E'),
+        \   'text': l:error['message'],
+        \   'detail': l:detail,
         \})
     endfor
-
     return l:output
 endfunction
 
@@ -92,12 +76,15 @@ endfunction
 
 function! ale_linters#dockerfile#hadolint#GetCommand(buffer) abort
     let l:command = ale_linters#dockerfile#hadolint#GetExecutable(a:buffer)
+    let l:opts = '--format=json -'
 
     if l:command is# 'docker'
-        return 'docker run --rm -i ' . ale#Var(a:buffer, 'dockerfile_hadolint_docker_image')
+        return printf('docker run --rm -i %s hadolint %s',
+            \ ale#Var(a:buffer, 'dockerfile_hadolint_docker_image'), 
+            \ l:opts)
     endif
 
-    return 'hadolint -'
+    return 'hadolint ' . l:opts
 endfunction
 
 
