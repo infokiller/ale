@@ -1,4 +1,5 @@
 " Author: hauleth - https://github.com/hauleth
+" Author: infokiller - https://github.com/infokiller
 
 " always, yes, never
 call ale#Set('dockerfile_hadolint_use_docker', 'never')
@@ -6,10 +7,10 @@ call ale#Set('dockerfile_hadolint_docker_image', 'hadolint/hadolint')
 
 " Shellcheck knows a 'style' severity - pin it to info level as well.
 let s:json_level_to_type = {
-    \ 'style': 'I',
-    \ 'info': 'I',
-    \ 'warning': 'W',
-    \ 'error': 'E',
+\ 'style': 'I',
+\ 'info': 'I',
+\ 'warning': 'W',
+\ 'error': 'E',
 \ }
 
 function! ale_linters#dockerfile#hadolint#Handle(buffer, lines) abort
@@ -28,22 +29,35 @@ function! ale_linters#dockerfile#hadolint#Handle(buffer, lines) abort
     "     ...
     " ]
     let l:output = []
-    for l:error in json_decode(a:lines)
-        let l:domain = 'https://github.com/hadolint/hadolint/wiki/'
+
+    " hadolint outputs only one json line, but we use join to avoid future
+    " breaking changes.
+    for l:error in json_decode(join(a:lines, ' '))
+        let l:domain = 'https://github.com/hadolint/hadolint/wiki'
+
         if l:error['code'][:1] is# 'SC'
-            let l:domain = 'https://github.com/koalaman/shellcheck/wiki/'
+            let l:domain = 'https://github.com/koalaman/shellcheck/wiki'
         endif
-        let l:detail = printf("%s ( %s%s ) \n\n%s", 
-            \ l:error['code'], l:domain, l:error['code'], l:error['message'],
-        \ ) 
+
+        let l:detail = printf("%s ( %s/%s ) \n\n%s",
+        \ l:error['code'], l:domain, l:error['code'], l:error['message'],
+        \ )
+        " NOTE: the column value from hadolint seems to always be set to 1
+        let l:col = 0
+
+        if l:error['column'] > 1
+            let l:col = l:error['column']
+        endif
+
         call add(l:output, {
         \   'lnum': l:error['line'],
-        \   'col': l:error['column'],
+        \   'col': l:col,
         \   'type': get(s:json_level_to_type, l:error['level'], 'E'),
         \   'text': l:error['message'],
         \   'detail': l:detail,
         \})
     endfor
+
     return l:output
 endfunction
 
@@ -80,8 +94,8 @@ function! ale_linters#dockerfile#hadolint#GetCommand(buffer) abort
 
     if l:command is# 'docker'
         return printf('docker run --rm -i %s hadolint %s',
-            \ ale#Var(a:buffer, 'dockerfile_hadolint_docker_image'), 
-            \ l:opts)
+        \ ale#Var(a:buffer, 'dockerfile_hadolint_docker_image'),
+        \ l:opts)
     endif
 
     return 'hadolint ' . l:opts
