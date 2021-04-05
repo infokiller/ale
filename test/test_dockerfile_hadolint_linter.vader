@@ -55,7 +55,7 @@ Execute(command is correct when using docker):
   let b:ale_dockerfile_hadolint_use_docker = 'always'
 
   AssertEqual
-  \ "docker run --rm -i hadolint/hadolint",
+  \ "docker run --rm -i hadolint/hadolint hadolint --format=json -",
   \ ale_linters#dockerfile#hadolint#GetCommand(bufnr(''))
 
 
@@ -63,28 +63,28 @@ Execute(command is correct when not docker):
   let b:ale_dockerfile_hadolint_use_docker = 'never'
 
   AssertEqual
-  \ "hadolint -",
+  \ "hadolint --format=json -",
   \ ale_linters#dockerfile#hadolint#GetCommand(bufnr(''))
 
 Execute(test warnings from hadolint):
   AssertEqual
   \ [{'lnum': 10, 'col': 0, 'type': 'W', 'text': 'Using latest is prone to errors', 'detail': "DL3007 ( https://github.com/hadolint/hadolint/wiki/DL3007 )\n\nUsing latest is prone to errors"}],
   \ ale_linters#dockerfile#hadolint#Handle(bufnr(''), [
-  \ '/dev/stdin:10 DL3007 warning: Using latest is prone to errors',
+  \ '[{"line":10,"code":"DL3007","message":"Using latest is prone to errors","column":0,"file":"-","level":"warning"}]',
   \ ])
 
 Execute(test warnings from shellcheck):
   AssertEqual
   \ [{'lnum': 3, 'col': 0, 'type': 'W', 'text': 'bar is referenced but not assigned.', 'detail': "SC2154 ( https://github.com/koalaman/shellcheck/wiki/SC2154 )\n\nbar is referenced but not assigned."}],
   \ ale_linters#dockerfile#hadolint#Handle(bufnr(''), [
-  \ '/dev/stdin:3 SC2154 warning: bar is referenced but not assigned.',
+  \ '[{"line":3,"code":"SC2154","message":"bar is referenced but not assigned.","column":0,"file":"-","level":"warning"}]',
   \ ])
 
 Execute(test errors from dockerfile parser):
   AssertEqual
   \ [{'lnum': 3, 'col': 4, 'type': 'E', 'text': 'unexpected "A" expecting at least one space after ''RUN''', 'detail': 'unexpected "A" expecting at least one space after ''RUN'''}],
   \ ale_linters#dockerfile#hadolint#Handle(bufnr(''), [
-  \ "/dev/stdin:3:4 unexpected \"A\" expecting at least one space after 'RUN'",
+  \ '[{"line":3,"code":"SC2154","message":"unexpected \"A\" expecting at least one space after ''RUN''","column":4,"file":"-","level":"error"}]',
   \ ])
 
 " fin...

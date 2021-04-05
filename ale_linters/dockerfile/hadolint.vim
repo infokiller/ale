@@ -39,7 +39,7 @@ function! ale_linters#dockerfile#hadolint#Handle(buffer, lines) abort
             let l:domain = 'https://github.com/koalaman/shellcheck/wiki'
         endif
 
-        let l:detail = printf("%s ( %s/%s ) \n\n%s",
+        let l:detail = printf("%s ( %s/%s )\n\n%s",
         \ l:error['code'], l:domain, l:error['code'], l:error['message'],
         \ )
         " NOTE: the column value from hadolint seems to always be set to 1
